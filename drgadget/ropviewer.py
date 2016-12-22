@@ -1,5 +1,5 @@
 import idaapi
-import os,sys, types
+import os, sys, types
 from idc import *
 from payload import Item
 from copy import deepcopy
@@ -9,36 +9,36 @@ drgadget_plugins_path = idaapi.idadir(os.path.join("plugins", "drgadget", "plugi
 
 sys.path.append(drgadget_plugins_path)
 
+
 # TODO: remove load- and save payload dialogs from context menu
 # and move to IDA's File menu?
 class ropviewer_t(idaapi.simplecustviewer_t):
-
     def __init__(self, payload):
         self.payload = payload
 
         # FIXME: ugly
-        self.menu_loadfromfile  = None
-        self.menu_savetofile    = None
-        self.menu_copyitem      = None
-        self.menu_cutitem       = None
-        self.menu_pasteitem     = None
-        self.menu_insertitem    = None
-        self.menu_jumpto        = None
-        self.menu_toggle        = None
-        self.menu_deleteitem    = None
-        self.menu_edititem      = None
-        self.menu_reset         = None
-        self.menu_comment       = None
-        self.menu_refresh       = None
- 
-        self.window_created      = False
+        self.menu_loadfromfile = None
+        self.menu_savetofile = None
+        self.menu_copyitem = None
+        self.menu_cutitem = None
+        self.menu_pasteitem = None
+        self.menu_insertitem = None
+        self.menu_jumpto = None
+        self.menu_toggle = None
+        self.menu_deleteitem = None
+        self.menu_edititem = None
+        self.menu_reset = None
+        self.menu_comment = None
+        self.menu_refresh = None
+
+        self.window_created = False
 
         self.capGadget = "Dr. Gadget"
         self.capCodeData = "Code / Data"
-        self.capHex    = "Hexdump"
-        self.capInfo   = "Info"
+        self.capHex = "Hexdump"
+        self.capInfo = "Info"
 
-        self.pluginlist         = self.load_plugins()
+        self.pluginlist = self.load_plugins()
 
         self.clipboard = None
 
@@ -51,12 +51,11 @@ class ropviewer_t(idaapi.simplecustviewer_t):
         self.iv = dataviewers.simpledataviewer_t()
         self.iv.Create(self.capInfo)
 
-
-        idaapi.simplecustviewer_t.__init__(self)       
+        idaapi.simplecustviewer_t.__init__(self)
 
     def load_plugins(self):
         global drgadget_plugins_path
-        
+
         pluginlist = []
         print "loading extensions..."
         for (_path, _dir, files) in os.walk(drgadget_plugins_path):
@@ -77,7 +76,7 @@ class ropviewer_t(idaapi.simplecustviewer_t):
             return idaapi.simplecustviewer_t.Show(self)
 
         return
-    
+
     def Create(self):
         if not idaapi.simplecustviewer_t.Create(self, self.capGadget):
             return False
@@ -85,12 +84,11 @@ class ropviewer_t(idaapi.simplecustviewer_t):
             self.refresh()
         else:
             self.ClearLines()
-      
+
         return True
 
     def OnClose(self):
         self.window_created = False
-
 
     def create_colored_line(self, n):
         # todo
@@ -99,7 +97,7 @@ class ropviewer_t(idaapi.simplecustviewer_t):
             typ = item.type
 
             width = self.payload.proc.get_pointer_size()
-            cline = idaapi.COLSTR("%04X  " % (n*width), idaapi.SCOLOR_AUTOCMT)
+            cline = idaapi.COLSTR("%04X  " % (n * width), idaapi.SCOLOR_AUTOCMT)
             ea = item.ea
             fmt = self.payload.proc.get_data_fmt_string()
             elem = fmt % ea
@@ -109,7 +107,7 @@ class ropviewer_t(idaapi.simplecustviewer_t):
             else:
                 elem = idaapi.COLSTR(elem, idaapi.SCOLOR_DNUM)
             cline += elem
-            
+
             comm = ""
             if len(item.comment):
                 comm += " ; %s" % item.comment
@@ -126,20 +124,17 @@ class ropviewer_t(idaapi.simplecustviewer_t):
     def get_clipboard(self):
         return self.clipboard
 
-
     def create_colored_lines(self):
         lines = []
         for i in xrange(self.payload.get_number_of_items()):
             l = self.create_colored_line(i)
             lines.append(l)
         return lines
-    
 
     def copy_item(self, n):
         item = self.get_item(n)
         if item != None:
             self.set_clipboard((n, "c", item))
-
 
     def paste_item(self, n):
         if self.get_clipboard() != None:
@@ -149,13 +144,11 @@ class ropviewer_t(idaapi.simplecustviewer_t):
             if mode == 'x':
                 self.clear_clipboard()
 
-
     def cut_item(self, n):
         item = self.get_item_at_cur_line()
         if item != None:
             self.set_clipboard((n, "x", item))
             self.delete_item(n, False)
-      
 
     def edit_item(self, n):
         item = self.get_item(n)
@@ -174,7 +167,7 @@ class ropviewer_t(idaapi.simplecustviewer_t):
             n = 0
         if n < self.payload.get_number_of_items():
             item = deepcopy(self.payload.get_item(n))
-        return item            
+        return item
 
     def get_item_at_cur_line(self):
         n = self.GetLineNo()
@@ -190,7 +183,7 @@ class ropviewer_t(idaapi.simplecustviewer_t):
         item = self.get_item(n)
         if item != None:
             item.ea -= 1
-            self.set_item(n, item)   
+            self.set_item(n, item)
 
     def insert_item(self, n, item=None):
         if self.Count() == 0:
@@ -204,7 +197,7 @@ class ropviewer_t(idaapi.simplecustviewer_t):
         self.payload.set_item(n, item)
         self.refresh()
 
-    def delete_item(self, n, ask = True):
+    def delete_item(self, n, ask=True):
         item = self.get_item(n)
         if item != None:
             result = 1
@@ -220,15 +213,15 @@ class ropviewer_t(idaapi.simplecustviewer_t):
         if item != None:
             result = item.comment
         return result
-    
+
     def set_comment(self, n):
         item = self.get_item(n)
-        if item != None:
+        if item is not None:
             s = AskStr(item.comment, "Enter Comment")
-            if s != None:
+            if s is not None:
                 item.comment = s
                 self.set_item(n, item)
-               
+
     def toggle_item(self, n):
         item = self.get_item(n)
         if item != None:
@@ -248,7 +241,7 @@ class ropviewer_t(idaapi.simplecustviewer_t):
         if item != None:
             if item.type == Item.TYPE_CODE:
                 Jump(item.ea)
-                    
+
     def refresh(self):
         self.ClearLines()
         for line in self.create_colored_lines():
@@ -256,7 +249,7 @@ class ropviewer_t(idaapi.simplecustviewer_t):
         self.Refresh()
 
     def show_content_viewers(self):
-       
+
         self.dav.Show()
         self.hv.Show()
         self.iv.Show()
@@ -273,7 +266,7 @@ class ropviewer_t(idaapi.simplecustviewer_t):
     def update_content_viewers(self):
         n = self.GetLineNo()
         item = self.get_item(n)
-        
+
         self.dav.clear()
         self.hv.clear()
         self.iv.clear()
@@ -290,16 +283,16 @@ class ropviewer_t(idaapi.simplecustviewer_t):
                 # get various info
                 seg = idaapi.getseg(item.ea)
                 if seg:
-                    name      = idaapi.get_true_segm_name(seg)
-                    perm      = seg.perm
-                    ltype     = "ld" if seg.is_loader_segm() else "dbg"
-                    ea_start  = seg.startEA
-                    ea_end    = seg.endEA
+                    name = idaapi.get_true_segm_name(seg)
+                    perm = seg.perm
+                    ltype = "ld" if seg.is_loader_segm() else "dbg"
+                    ea_start = seg.startEA
+                    ea_end = seg.endEA
 
                     perms = ""
                     perms += "R" if perm & idaapi.SEGPERM_READ != 0 else "."
                     perms += "W" if perm & idaapi.SEGPERM_WRITE != 0 else "."
-                    perms += "X" if perm & idaapi.SEGPERM_EXEC != 0 else "."                
+                    perms += "X" if perm & idaapi.SEGPERM_EXEC != 0 else "."
                     self.iv.add_line("<%s> [%X - %X], %s, [%s]" % (name, ea_start, ea_end, ltype, perms))
             else:
                 stype = GetStringType(item.ea)
@@ -307,8 +300,8 @@ class ropviewer_t(idaapi.simplecustviewer_t):
                     scontent = GetString(item.ea, -1, stype)
                     if scontent != None and len(scontent):
                         self.dav.add_line(idaapi.COLSTR("\"%s\"" % scontent, idaapi.SCOLOR_DSTR))
-                        #length = idaapi.get_max_ascii_length(item.ea, stype, idaapi.ALOPT_IGNHEADS)
-                        #self.hv.add_line()
+                        # length = idaapi.get_max_ascii_length(item.ea, stype, idaapi.ALOPT_IGNHEADS)
+                        # self.hv.add_line()
                 else:
                     scontent = GetString(item.ea, -1, ASCSTR_C)
                     if scontent != None and len(scontent):
@@ -326,8 +319,8 @@ class ropviewer_t(idaapi.simplecustviewer_t):
     def OnKeydown(self, vkey, shift):
         n = self.GetLineNo()
 
-        # print "OnKeydown, vk=%d shift=%d" % (vkey, shift)
-        
+        # print "OnKeydown, vkey=%d shift=%d" % (vkey, shift)
+
         # ESCAPE
         if vkey == 27:
             self.Close()
@@ -335,12 +328,12 @@ class ropviewer_t(idaapi.simplecustviewer_t):
         # ENTER
         elif vkey == 13:
             self.jump_to_item_ea(n)
-            
+
         # CTRL
         elif shift == 4:
             if vkey == ord("C"):
                 self.copy_item(n)
-           
+
             elif vkey == ord("X"):
                 self.cut_item(n)
 
@@ -360,17 +353,15 @@ class ropviewer_t(idaapi.simplecustviewer_t):
             elif vkey == ord("S"):
                 self.export_binary()
 
-
-        # colon
-        elif vkey == 190:
+        elif vkey == 186:  # colon
             self.set_comment(self.GetLineNo())
 
         elif vkey == ord('O'):
             self.toggle_item(n)
-            
+
         elif vkey == ord('D'):
             self.delete_item(n)
-                
+
         elif vkey == ord("E"):
             self.edit_item(n)
 
@@ -391,7 +382,7 @@ class ropviewer_t(idaapi.simplecustviewer_t):
         else:
             return False
 
-        self.update_content_viewers()        
+        self.update_content_viewers()
         return True
 
     def OnCursorPosChanged(self):
@@ -401,23 +392,21 @@ class ropviewer_t(idaapi.simplecustviewer_t):
     def OnHint(self, lineno):
         if self.payload.get_item(lineno).type != Item.TYPE_CODE:
             return None
-        
+
         ea = self.payload.get_item(lineno).ea
         dis = self.payload.da.get_disasm(ea)
         hint = ""
 
-       
         for l in dis:
             hint += l[0]
-           
-        size_hint = len(dis)
-        return(size_hint, hint)
 
+        size_hint = len(dis)
+        return size_hint, hint
 
     def OnPopup(self):
         self.ClearPopupMenu()
         self.pluginmenuids = {}
-        
+
         # FIXME: ugly
         if not self.Count():
             self.menu_new = self.AddPopupMenu("New", "Ctrl-N")
@@ -438,7 +427,7 @@ class ropviewer_t(idaapi.simplecustviewer_t):
             self.menu_edititem = self.AddPopupMenu("Edit item", "E")
             self.menu_toggle = self.AddPopupMenu("Toggle item type", "O")
             self.menu_comment = self.AddPopupMenu("Add comment", ":")
-            self.menu_reset  = self.AddPopupMenu("Reset types")
+            self.menu_reset = self.AddPopupMenu("Reset types")
             self.menu_jumpto = self.AddPopupMenu("Go to item address", "Enter")
             self.AddPopupMenu("-")
             self.menu_cutitem = self.AddPopupMenu("Cut item", "Ctrl-X")
@@ -471,31 +460,29 @@ class ropviewer_t(idaapi.simplecustviewer_t):
     def erase_all(self):
         self.payload.init(items=[])
         self.refresh()
-    
 
     def OnPopupMenu(self, menu_id):
         n = self.GetLineNo()
-        
+
         if menu_id == self.menu_new:
             if AskYN(1, "Are you sure?") == 1:
                 self.erase_all()
-            
+
         elif menu_id == self.menu_loadfromfile:
             self.import_binary()
 
         elif menu_id == self.menu_savetofile:
             self.export_binary()
-                        
+
         elif menu_id == self.menu_jumpto:
             n = self.GetLineNo()
             Jump(self.payload.get_item(n).ea)
-
 
         elif menu_id == self.menu_reset:
             if AskYN(1, "Are you sure?") == 1:
                 self.payload.reset_types()
                 self.refresh()
-                              
+
         elif menu_id == self.menu_toggle:
             self.toggle_item(n)
 
@@ -525,8 +512,8 @@ class ropviewer_t(idaapi.simplecustviewer_t):
 
         elif menu_id in self.pluginmenuids.keys():
             self.pluginmenuids[menu_id]()
-            
+
         else:
             return False
-        
+
         return True
