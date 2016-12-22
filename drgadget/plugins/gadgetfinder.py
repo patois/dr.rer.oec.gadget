@@ -211,7 +211,7 @@ def FindInstructionsInSegments(segments, bin_str, exclASLR, exclDEP, exclNonExec
     nMatches = 0    
     for seg in segments:
         curseg += 1
-        if (seg.perm & idaapi.SEGPERM_EXEC) == 0 and exclNonExec:
+        if (seg.perm & SEGPERM_EXEC) == 0 and exclNonExec:
             continue
         ea = sea = seg.startEA
         segname = SegName(ea)
