@@ -263,16 +263,17 @@ class ropviewer_t(idaapi.simplecustviewer_t):
             idaapi.set_dock_pos(self.capHex, self.capGadget, idaapi.DP_RIGHT)
             idaapi.set_dock_pos(self.capCodeData, self.capHex, idaapi.DP_RIGHT)
 
-    def update_content_viewers(self):
-        n = self.GetLineNo()
+    def update_content_viewers(self, n=None):
+        if n is None:
+            n = self.GetLineNo()
+
         item = self.get_item(n)
 
         self.dav.clear()
         self.hv.clear()
         self.iv.clear()
 
-        if item != None:
-
+        if item is not None:
             if item.type == Item.TYPE_CODE:
                 # get disassembly and hex stream
                 dis = self.payload.da.get_disasm(item.ea)
@@ -319,7 +320,7 @@ class ropviewer_t(idaapi.simplecustviewer_t):
     def OnKeydown(self, vkey, shift):
         n = self.GetLineNo()
 
-        # print "OnKeydown, vkey=%d shift=%d" % (vkey, shift)
+        print "OnKeydown, vkey=%d shift=%d lineno = %d" % (vkey, shift, n)
 
         # ESCAPE
         if vkey == 27:
@@ -379,11 +380,16 @@ class ropviewer_t(idaapi.simplecustviewer_t):
         elif vkey == 107:
             self.inc_item_value(n)
 
-        else:
-            return False
+        # down key
+        elif vkey == 40:
+            n = min(n + 1, self.Count())
 
-        self.update_content_viewers()
-        return True
+        # up key
+        elif vkey == 38:
+            n = max(n - 1, 0)
+
+        self.update_content_viewers(n)
+        return False  # always propagate the event onwards
 
     def OnCursorPosChanged(self):
         # TODO: update on Y coordinate changes only
