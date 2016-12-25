@@ -320,7 +320,7 @@ class ropviewer_t(idaapi.simplecustviewer_t):
     def OnKeydown(self, vkey, shift):
         n = self.GetLineNo()
 
-        # print "OnKeydown, vkey=%d shift=%d" % (vkey, shift)
+        print "OnKeydown, vkey=%d shift=%d lineno = %d" % (vkey, shift, n)
 
         # ESCAPE
         if vkey == 27:
