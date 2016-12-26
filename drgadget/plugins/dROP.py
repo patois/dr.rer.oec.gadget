@@ -3,6 +3,7 @@ from idc import *
 from idautils import Assemble
 from payload import Item
 
+
 # the following code was taken from
 # http://hexblog.com/2009/09/assembling_and_finding_instruc.html
 # -----------------------------------------------------------------------
@@ -13,7 +14,7 @@ def FindInstructions(instr, asm_where=None):
     """
 
     failasm = "Failed to assemble:"
-    
+
     if not asm_where:
         # get first segment
         asm_where = FirstSeg()
@@ -34,18 +35,18 @@ def FindInstructions(instr, asm_where=None):
             try:
                 buf = ''.join([chr(int(x, 16)) for x in line.split()])
             except ValueError:
-                return (False, failasm+line)
+                return (False, failasm + line)
         else:
             # assemble the instruction
             ret, buf = Assemble(asm_where, line)
             if not ret:
-                return (False, failasm+line)
+                return (False, failasm + line)
         # add the assembled buffer
         bufs.append(buf)
 
     # join the buffer into one string
     buf = ''.join(bufs)
-    
+
     # take total assembled instructions length
     tlen = len(buf)
 
@@ -66,6 +67,7 @@ def FindInstructions(instr, asm_where=None):
 
     return (True, ret)
 
+
 # -----------------------------------------------------------------------
 def find(s=None, x=False, asm_where=None):
     result = None
@@ -83,6 +85,7 @@ def find(s=None, x=False, asm_where=None):
             print "bug"
     return result
 
+
 class drgadgetplugin_t:
     def __init__(self, payload, rv):
         self.payload = payload
@@ -98,15 +101,15 @@ class drgadgetplugin_t:
         if self.payload.proc.supports_assemble():
             result = self.menucallbacks
         return result
-    
+
     def run(self):
         n = self.rv.Count()
         for i in xrange(n):
             item = self.rv.get_item(i)
-            if item != None and item.type == Item.TYPE_CODE:
+            if item is not None and item.type == Item.TYPE_CODE:
                 cmt = item.comment
-                ea = find (cmt, True)
-                if ea != None:
+                ea = find(cmt, True)
+                if ea is not None:
                     item.ea = ea
                     self.rv.set_item(i, item)
                 else:
