@@ -1,4 +1,4 @@
-import idaapi, ida_segment, ida_bytes
+import idaapi, ida_segment, ida_bytes, ida_lines
 import os, sys, types
 from idc import *
 from payload import Item
@@ -13,7 +13,7 @@ HEX_DUMP_DISPLAY_LENGTH = 0x20
 HEX_DUMP_LINE_LENGTH = 4
 
 
-def get_hex_dump_lines(ea, length=HEX_DUMP_DISPLAY_LENGTH):
+def get_hex_dump_lines(ea, length=HEX_DUMP_DISPLAY_LENGTH, color=idaapi.SCOLOR_DNAME):
     segment = ida_segment.getseg(ea)
     if segment is None:
         return ""
@@ -31,6 +31,10 @@ def get_hex_dump_lines(ea, length=HEX_DUMP_DISPLAY_LENGTH):
             # append to an existing line
 
             hex_dump_lines[-1] += ("%02x " % b)
+
+    # apply color to all the lines
+    for i in xrange(len(hex_dump_lines)):
+        hex_dump_lines[i] = ida_lines.COLSTR(hex_dump_lines[i], color)
 
     return hex_dump_lines
 
@@ -131,7 +135,6 @@ class ropviewer_t(idaapi.simplecustviewer_t):
             elif item_type == Item.TYPE_ADDRESS:
                 color = idaapi.SCOLOR_DNAME if SegStart(ea) != BADADDR else idaapi.SCOLOR_ERROR
                 elem = idaapi.COLSTR(elem, color)
-                pass
             else:
                 # immediate
                 elem = idaapi.COLSTR(elem, idaapi.SCOLOR_DNUM)
@@ -331,7 +334,6 @@ class ropviewer_t(idaapi.simplecustviewer_t):
                         self.dav.add_line(idaapi.COLSTR("\"%s\"" % string_content, idaapi.SCOLOR_DSTR))
                         hex_dump_length = len(string_content) + 1
 
-                # TODO: add colors
                 for line in get_hex_dump_lines(item.ea, hex_dump_length):
                     self.hv.add_line(line)
             # do nothing for TYPE_IMMEDIATE
@@ -425,8 +427,6 @@ class ropviewer_t(idaapi.simplecustviewer_t):
 
     def OnHint(self, lineno):
         item_type = self.payload.get_item(lineno).type
-        print item_type, type(item_type)
-
         if item_type not in (Item.TYPE_CODE, Item.TYPE_ADDRESS):
             return None
 
@@ -449,14 +449,21 @@ class ropviewer_t(idaapi.simplecustviewer_t):
                 string_content = GetString(ea, -1, string_type)
                 if string_content is not None and len(string_content):
                     seg_name = ida_segment.get_true_segm_name(ida_segment.getseg(ea))
-                    # TODO: add colors
-                    hint = '%08x:%s "%s"' % (ea, seg_name, string_content)
+                    if Name(ea):
+                        element = Name(ea)
+                    else:
+                        fmt = self.payload.proc.get_data_fmt_string()
+                        element = fmt % ea
+
+                    hint = ida_lines.COLSTR(element, ida_lines.SCOLOR_DNAME)
+                    hint += (':' + ida_lines.COLSTR(seg_name, ida_lines.SCOLOR_SEGNAME))
+                    hint += (' "' + ida_lines.COLSTR(string_content, ida_lines.SCOLOR_DSTR) + '"')
                     return 1, hint
 
             # ...otherwise we'll display a hex dump
-            # TODO: add colors
-            hint = get_hex_dump_lines(ea)
-            return len(hint), hint
+            hex_lines = get_hex_dump_lines(ea)
+            hint = '\n'.join(hex_lines)
+            return len(hex_lines), hint
 
     def OnPopup(self):
         self.ClearPopupMenu()
