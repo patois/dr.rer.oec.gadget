@@ -11,10 +11,9 @@ todo:
 - add proper handling/support for plugin hotkeys
 """
 
-pluginname       =  "Dr.Gadget"
-__author__       =  "patois"
-__version__      =  "0.59b"
-
+pluginname = "Dr.Gadget"
+__author__ = "patois"
+__version__ = "0.59b"
 
 import struct, os, sys
 from idaapi import *
@@ -45,6 +44,7 @@ class idp_hook(idaapi.IDP_Hooks):
 pl = None
 rv = None
 
+
 class drgadget(idaapi.plugin_t):
     flags = 0
     comment = ""
@@ -61,7 +61,6 @@ class drgadget(idaapi.plugin_t):
         rv = None
         return idaapi.PLUGIN_KEEP
 
-
     def run(self, arg):
         global pl
         global rv
@@ -72,17 +71,18 @@ class drgadget(idaapi.plugin_t):
                 print "%s: loaded data from IDB." % pluginname
         if not rv:
             rv = ropviewer.ropviewer_t(pl)
-            if not rv.Create ():
+            if not rv.Create():
                 print "could not create window."
                 return
 
         rv.Show()
         rv.show_content_viewers()
-            
+
     def term(self):
         if self.hook:
             self.hook.unhook()
         pass
+
 
 # -----------------------------------------------------------------------
 

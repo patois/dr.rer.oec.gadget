@@ -1,4 +1,4 @@
-import idaapi
+import idaapi, ida_segment, ida_bytes
 import os, sys, types
 from idc import *
 from payload import Item
@@ -8,6 +8,31 @@ import dataviewers
 drgadget_plugins_path = idaapi.idadir(os.path.join("plugins", "drgadget", "plugins"))
 
 sys.path.append(drgadget_plugins_path)
+
+HEX_DUMP_DISPLAY_LENGTH = 0x20
+HEX_DUMP_LINE_LENGTH = 4
+
+
+def get_hex_dump_lines(ea, length=HEX_DUMP_DISPLAY_LENGTH):
+    segment = ida_segment.getseg(ea)
+    if segment is None:
+        return ""
+    read_length = min(length, segment.startEA + segment.size() - ea)
+    binary_contents = ida_bytes.get_many_bytes(ea, read_length)
+
+    # TODO: add color (here?)
+    hex_dump_lines = []
+    for i, b in enumerate(binary_contents):
+        b = ord(b)
+        if i % HEX_DUMP_LINE_LENGTH == 0:
+            # start a new line
+            hex_dump_lines.append("%02x " % b)
+        else:
+            # append to an existing line
+
+            hex_dump_lines[-1] += ("%02x " % b)
+
+    return hex_dump_lines
 
 
 # TODO: remove load- and save payload dialogs from context menu
@@ -91,20 +116,24 @@ class ropviewer_t(idaapi.simplecustviewer_t):
         self.window_created = False
 
     def create_colored_line(self, n):
-        # todo
         item = self.get_item(n)
-        if item != None:
-            typ = item.type
+        if item is not None:
+            item_type = item.type
 
             width = self.payload.proc.get_pointer_size()
             cline = idaapi.COLSTR("%04X  " % (n * width), idaapi.SCOLOR_AUTOCMT)
             ea = item.ea
             fmt = self.payload.proc.get_data_fmt_string()
             elem = fmt % ea
-            if typ == Item.TYPE_CODE:
+            if item_type == Item.TYPE_CODE:
                 color = idaapi.SCOLOR_CODNAME if SegStart(ea) != BADADDR else idaapi.SCOLOR_ERROR
                 elem = idaapi.COLSTR(elem, color)
+            elif item_type == Item.TYPE_ADDRESS:
+                color = idaapi.SCOLOR_DNAME if SegStart(ea) != BADADDR else idaapi.SCOLOR_ERROR
+                elem = idaapi.COLSTR(elem, color)
+                pass
             else:
+                # immediate
                 elem = idaapi.COLSTR(elem, idaapi.SCOLOR_DNUM)
             cline += elem
 
@@ -133,11 +162,11 @@ class ropviewer_t(idaapi.simplecustviewer_t):
 
     def copy_item(self, n):
         item = self.get_item(n)
-        if item != None:
+        if item is not None:
             self.set_clipboard((n, "c", item))
 
     def paste_item(self, n):
-        if self.get_clipboard() != None:
+        if self.get_clipboard() is not None:
             _, mode, item = self.get_clipboard()
             self.insert_item(n, item)
             self.refresh()
@@ -146,17 +175,17 @@ class ropviewer_t(idaapi.simplecustviewer_t):
 
     def cut_item(self, n):
         item = self.get_item_at_cur_line()
-        if item != None:
+        if item is not None:
             self.set_clipboard((n, "x", item))
             self.delete_item(n, False)
 
     def edit_item(self, n):
         item = self.get_item(n)
-        if item != None:
+        if item is not None:
             val = item.ea
 
             newVal = AskAddr(val, "Feed me!")
-            if newVal != None:
+            if newVal is not None:
                 item.ea = newVal
                 self.set_item(n, item)
                 self.refresh()
@@ -175,21 +204,21 @@ class ropviewer_t(idaapi.simplecustviewer_t):
 
     def inc_item_value(self, n):
         item = self.get_item(n)
-        if item != None:
+        if item is not None:
             item.ea += 1
             self.set_item(n, item)
 
     def dec_item_value(self, n):
         item = self.get_item(n)
-        if item != None:
+        if item is not None:
             item.ea -= 1
             self.set_item(n, item)
 
     def insert_item(self, n, item=None):
         if self.Count() == 0:
             n = 0
-        if item == None:
-            item = Item(0, Item.TYPE_DATA)
+        if item is None:
+            item = Item(0, Item.TYPE_IMMEDIATE)
         self.payload.insert_item(n, item)
         self.refresh()
 
@@ -199,7 +228,7 @@ class ropviewer_t(idaapi.simplecustviewer_t):
 
     def delete_item(self, n, ask=True):
         item = self.get_item(n)
-        if item != None:
+        if item is not None:
             result = 1
             if ask:
                 result = AskYN(0, "Delete item?")
@@ -210,7 +239,7 @@ class ropviewer_t(idaapi.simplecustviewer_t):
     def get_comment(self, n):
         result = ""
         item = self.get_item(n)
-        if item != None:
+        if item is not None:
             result = item.comment
         return result
 
@@ -224,12 +253,8 @@ class ropviewer_t(idaapi.simplecustviewer_t):
 
     def toggle_item(self, n):
         item = self.get_item(n)
-        if item != None:
-            if item.type == Item.TYPE_CODE:
-                item.type = Item.TYPE_DATA
-            else:
-                ea = item.ea
-                item.type = Item.TYPE_CODE
+        if item is not None:
+            item.type = Item.TYPES[(item.type + 1) % len(Item.TYPES)]
 
             self.set_item(n, item)
             l = self.create_colored_line(n)
@@ -238,8 +263,8 @@ class ropviewer_t(idaapi.simplecustviewer_t):
 
     def jump_to_item_ea(self, n):
         item = self.get_item(n)
-        if item != None:
-            if item.type == Item.TYPE_CODE:
+        if item is not None:
+            if item.type in (Item.TYPE_CODE, Item.TYPE_ADDRESS):
                 Jump(item.ea)
 
     def refresh(self):
@@ -295,18 +320,21 @@ class ropviewer_t(idaapi.simplecustviewer_t):
                     perms += "W" if perm & idaapi.SEGPERM_WRITE != 0 else "."
                     perms += "X" if perm & idaapi.SEGPERM_EXEC != 0 else "."
                     self.iv.add_line("<%s> [%X - %X], %s, [%s]" % (name, ea_start, ea_end, ltype, perms))
-            else:
-                stype = GetStringType(item.ea)
-                if stype is not None:
-                    scontent = GetString(item.ea, -1, stype)
-                    if scontent != None and len(scontent):
-                        self.dav.add_line(idaapi.COLSTR("\"%s\"" % scontent, idaapi.SCOLOR_DSTR))
-                        # length = idaapi.get_max_ascii_length(item.ea, stype, idaapi.ALOPT_IGNHEADS)
-                        # self.hv.add_line()
-                else:
-                    scontent = GetString(item.ea, -1, ASCSTR_C)
-                    if scontent != None and len(scontent):
-                        self.dav.add_line("\"%s\"" % scontent)
+            elif item.type == Item.TYPE_ADDRESS:
+                # add a hex dump and a string view (if it's a string)
+                hex_dump_length = HEX_DUMP_DISPLAY_LENGTH
+
+                string_type = GetStringType(item.ea)
+                if string_type is not None:
+                    string_content = GetString(item.ea, -1, string_type)
+                    if string_content is not None and len(string_content):
+                        self.dav.add_line(idaapi.COLSTR("\"%s\"" % string_content, idaapi.SCOLOR_DSTR))
+                        hex_dump_length = len(string_content) + 1
+
+                # TODO: add colors
+                for line in get_hex_dump_lines(item.ea, hex_dump_length):
+                    self.hv.add_line(line)
+            # do nothing for TYPE_IMMEDIATE
 
         self.dav.update()
         self.hv.update()
@@ -382,7 +410,7 @@ class ropviewer_t(idaapi.simplecustviewer_t):
 
         # down key
         elif vkey == 40:
-            n = min(n + 1, self.Count())
+            n = min(n + 1, self.Count() - 1)
 
         # up key
         elif vkey == 38:
@@ -396,18 +424,39 @@ class ropviewer_t(idaapi.simplecustviewer_t):
         self.update_content_viewers()
 
     def OnHint(self, lineno):
-        if self.payload.get_item(lineno).type != Item.TYPE_CODE:
+        item_type = self.payload.get_item(lineno).type
+        print item_type, type(item_type)
+
+        if item_type not in (Item.TYPE_CODE, Item.TYPE_ADDRESS):
             return None
 
         ea = self.payload.get_item(lineno).ea
-        dis = self.payload.da.get_disasm(ea)
-        hint = ""
 
-        for l in dis:
-            hint += l[0]
+        if item_type == Item.TYPE_CODE:
+            dis = self.payload.da.get_disasm(ea)
+            hint = ""
 
-        size_hint = len(dis)
-        return size_hint, hint
+            for l in dis:
+                hint += l[0]
+
+            size_hint = len(dis)
+            return size_hint, hint
+        else:
+            # TYPE_ADDRESS
+            # if the address points to a string the hint will be a string...
+            string_type = GetStringType(ea)
+            if string_type is not None:
+                string_content = GetString(ea, -1, string_type)
+                if string_content is not None and len(string_content):
+                    seg_name = ida_segment.get_true_segm_name(ida_segment.getseg(ea))
+                    # TODO: add colors
+                    hint = '%08x:%s "%s"' % (ea, seg_name, string_content)
+                    return 1, hint
+
+            # ...otherwise we'll display a hex dump
+            # TODO: add colors
+            hint = get_hex_dump_lines(ea)
+            return len(hint), hint
 
     def OnPopup(self):
         self.ClearPopupMenu()
@@ -420,7 +469,7 @@ class ropviewer_t(idaapi.simplecustviewer_t):
             self.menu_loadfromfile = self.AddPopupMenu("Import ROP binary", "Ctrl-L")
             self.AddPopupMenu("-")
             self.menu_insertitem = self.AddPopupMenu("Insert item", "I")
-            if self.get_clipboard() != None:
+            if self.get_clipboard() is not None:
                 self.menu_pasteitem = self.AddPopupMenu("Paste item", "Ctrl-V")
         else:
             self.menu_new = self.AddPopupMenu("New", "Ctrl-N")
@@ -446,7 +495,7 @@ class ropviewer_t(idaapi.simplecustviewer_t):
         # load dr gadget plugins
         for instance in self.pluginlist:
             result = instance.get_callback_list()
-            if result != None:
+            if result is not None:
                 for r in result:
                     menu, cb, hotkey = r
                     self.pluginmenuids[self.AddPopupMenu(menu, hotkey)] = cb
