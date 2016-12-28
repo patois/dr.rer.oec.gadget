@@ -189,7 +189,7 @@ def FindInstructionsInSegments(segments, bin_str, exclASLR, exclDEP, exclNonExec
     maxseg = len(segments)
 
     # thedude had too much coffee
-    thedude = ["       "  + "\n" \
+    thedude = ["       " + "\n" \
                            "  (._.)" + "\n" \
                                        " /(  )\\" + "\n" \
                                                     "  |  |" + "\n",

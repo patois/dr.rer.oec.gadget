@@ -38,7 +38,7 @@ class idp_hook(idaapi.IDP_Hooks):
         if pl:
             print "\n%s: saving...\n" % pluginname
             pl.save_to_idb()
-        return _idaapi.IDP_Hooks_savebase(self, *args)
+        return super(idp_hook, self).savebase(*args)
 
 
 pl = None
