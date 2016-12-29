@@ -13,6 +13,7 @@ class Item:
         self.ea = ea
         self.type = _type
         self.comment = comment
+        self.block_num = 0
 
 
 class TargetProcessor:

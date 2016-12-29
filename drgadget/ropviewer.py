@@ -13,6 +13,34 @@ HEX_DUMP_DISPLAY_LENGTH = 0x20
 HEX_DUMP_LINE_LENGTH = 4
 
 
+def rgb_to_bgr_long(rgb):
+    # IDA represents background colors in a 0xBBGGRR format,
+    # and they must be of type long (not int)!
+    r = (rgb >> 16) & 0xFF
+    g = (rgb >> 8) & 0xFF
+    b = rgb & 0xFF
+
+    return long((b << 16) | (g << 8) | r)
+
+
+BACKGROUND_COLORS_BGR = (rgb_to_bgr_long(0),
+                         rgb_to_bgr_long(0xFFB6C1),
+                         rgb_to_bgr_long(0xEE799F),
+                         rgb_to_bgr_long(0xDA70D6),
+                         rgb_to_bgr_long(0xD8BFD8),
+                         rgb_to_bgr_long(0xCAE1FF),
+                         rgb_to_bgr_long(0x0000FF),
+                         rgb_to_bgr_long(0x00F5FF),
+                         rgb_to_bgr_long(0x00C78C),
+                         rgb_to_bgr_long(0x00FF7F),
+                         rgb_to_bgr_long(0x00C957),
+                         rgb_to_bgr_long(0x00FF00),
+                         rgb_to_bgr_long(0xB3EE3A),
+                         rgb_to_bgr_long(0xCDCD00),
+                         rgb_to_bgr_long(0xFFD700),
+                         )
+
+
 def get_hex_dump_lines(ea, length=HEX_DUMP_DISPLAY_LENGTH, color=idaapi.SCOLOR_DNAME):
     segment = ida_segment.getseg(ea)
     if segment is None:
@@ -52,6 +80,7 @@ class ropviewer_t(idaapi.simplecustviewer_t):
         self.menu_cutitem = None
         self.menu_pasteitem = None
         self.menu_insertitem = None
+        self.menu_makeblock = None
         self.menu_jumpto = None
         self.menu_toggle = None
         self.menu_deleteitem = None
@@ -121,31 +150,35 @@ class ropviewer_t(idaapi.simplecustviewer_t):
 
     def create_colored_line(self, n):
         item = self.get_item(n)
-        if item is not None:
-            item_type = item.type
+        if item is None:
+            return None
 
-            width = self.payload.proc.get_pointer_size()
-            cline = idaapi.COLSTR("%04X  " % (n * width), idaapi.SCOLOR_AUTOCMT)
-            ea = item.ea
-            fmt = self.payload.proc.get_data_fmt_string()
-            elem = fmt % ea
-            if item_type == Item.TYPE_CODE:
-                color = idaapi.SCOLOR_CODNAME if SegStart(ea) != BADADDR else idaapi.SCOLOR_ERROR
-                elem = idaapi.COLSTR(elem, color)
-            elif item_type == Item.TYPE_ADDRESS:
-                color = idaapi.SCOLOR_DNAME if SegStart(ea) != BADADDR else idaapi.SCOLOR_ERROR
-                elem = idaapi.COLSTR(elem, color)
-            else:
-                # immediate
-                elem = idaapi.COLSTR(elem, idaapi.SCOLOR_DNUM)
-            cline += elem
+        background_color = BACKGROUND_COLORS_BGR[item.block_num % len(BACKGROUND_COLORS_BGR)]
 
-            comm = ""
-            if len(item.comment):
-                comm += " ; %s" % item.comment
-            if len(comm):
-                cline += idaapi.COLSTR(comm, idaapi.SCOLOR_AUTOCMT)
-            return cline
+        item_type = item.type
+
+        width = self.payload.proc.get_pointer_size()
+        cline = idaapi.COLSTR("%04X  " % (n * width), idaapi.SCOLOR_AUTOCMT)
+        ea = item.ea
+        fmt = self.payload.proc.get_data_fmt_string()
+        elem = fmt % ea
+        if item_type == Item.TYPE_CODE:
+            color = idaapi.SCOLOR_CODNAME if SegStart(ea) != BADADDR else idaapi.SCOLOR_ERROR
+            elem = idaapi.COLSTR(elem, color)
+        elif item_type == Item.TYPE_ADDRESS:
+            color = idaapi.SCOLOR_DNAME if SegStart(ea) != BADADDR else idaapi.SCOLOR_ERROR
+            elem = idaapi.COLSTR(elem, color)
+        else:
+            # immediate
+            elem = idaapi.COLSTR(elem, idaapi.SCOLOR_DNUM)
+        cline += elem
+
+        comm = ""
+        if len(item.comment):
+            comm += " ; %s" % item.comment
+        if len(comm):
+            cline += idaapi.COLSTR(comm, idaapi.SCOLOR_AUTOCMT)
+        return cline, background_color
 
     def clear_clipboard(self):
         self.clipboard = None
@@ -272,8 +305,9 @@ class ropviewer_t(idaapi.simplecustviewer_t):
 
     def refresh(self):
         self.ClearLines()
-        for line in self.create_colored_lines():
-            self.AddLine(line)
+        # for line in self.create_colored_lines():
+        for line, background_color in self.create_colored_lines():
+            self.AddLine(line, bgcolor=background_color)
         self.Refresh()
 
     def show_content_viewers(self):
@@ -336,7 +370,7 @@ class ropviewer_t(idaapi.simplecustviewer_t):
 
                 for line in get_hex_dump_lines(item.ea, hex_dump_length):
                     self.hv.add_line(line)
-            # do nothing for TYPE_IMMEDIATE
+                    # do nothing for TYPE_IMMEDIATE
 
         self.dav.update()
         self.hv.update()
@@ -398,6 +432,9 @@ class ropviewer_t(idaapi.simplecustviewer_t):
 
         elif vkey == ord("I"):
             self.insert_item(n)
+
+        elif vkey == ord("B"):
+            self.make_block()
 
         elif vkey == ord("R"):
             self.refresh()
@@ -485,6 +522,7 @@ class ropviewer_t(idaapi.simplecustviewer_t):
             self.menu_savetofile = self.AddPopupMenu("Export ROP binary", "Ctrl-S")
             self.AddPopupMenu("-")
             self.menu_insertitem = self.AddPopupMenu("Insert item", "I")
+            self.menu_makeblock = self.AddPopupMenu("Make block", "B")
             self.menu_deleteitem = self.AddPopupMenu("Delete item", "D")
             self.menu_edititem = self.AddPopupMenu("Edit item", "E")
             self.menu_toggle = self.AddPopupMenu("Toggle item type", "O")
@@ -557,6 +595,9 @@ class ropviewer_t(idaapi.simplecustviewer_t):
         elif menu_id == self.menu_insertitem:
             self.insert_item(n)
 
+        elif menu_id == self.menu_makeblock:
+            self.make_block()
+
         elif menu_id == self.menu_edititem:
             self.edit_item(n)
 
@@ -579,3 +620,18 @@ class ropviewer_t(idaapi.simplecustviewer_t):
             return False
 
         return True
+
+    def make_block(self):
+        selection = self.GetSelection()
+        if selection is not None:
+            _, first_line, _, last_line = selection
+        else:
+            first_line = last_line = self.GetLineNo()
+
+        for n in xrange(first_line, last_line+1):
+            item = self.get_item(n)
+            if item is not None:
+                item.block_num += 1
+                self.set_item(n, item)
+        self.refresh()
+
