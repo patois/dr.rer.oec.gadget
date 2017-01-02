@@ -2,19 +2,23 @@ import idaapi
 from idc import *
 import pickle
 from idautils import DecodeInstruction
+import struct
+
 
 # add support for xrefs?
 class Item:
-    TYPE_DATA = 0
-    TYPE_CODE = 1
-    
-    def __init__(self, ea, _type, comment = ""):
+    TYPE_IMMEDIATE, TYPE_CODE, TYPE_ADDRESS = range(3)
+    TYPES = (TYPE_IMMEDIATE, TYPE_CODE, TYPE_ADDRESS)
+
+    def __init__(self, ea, _type, comment=""):
         self.ea = ea
         self.type = _type
         self.comment = comment
+        self.block_num = 0
+
 
 class TargetProcessor:
-    def __init__(self):      
+    def __init__(self):
         self.flags = idaapi.ph_get_flag()
         # instead of checking ph flags, should __EA64__ be used?
         self.is_64bit = (self.flags & idaapi.PR_USE64) != 0
@@ -23,7 +27,7 @@ class TargetProcessor:
         self.id = idaapi.ph_get_id()
         self.is_assemble_supported = (self.flags & idaapi.PR_ASSEMBLE) != 0
         self.is_delayslot_proc = (self.flags & idaapi.PR_DELAYED) != 0
-        
+
         # processor default ret instruction (icode, not opcode!)
         self.ret_icodes = [idaapi.ph_get_icode_return()]
 
@@ -34,9 +38,9 @@ class TargetProcessor:
         if self.is_64bit:
             self.ptrsize = 8
 
-        self.ptrsize_pyfmt_mapper = {2:"H", 4:"I", 8:"Q"}        
-        self.ptrsize_mask_mapper = {2:0xFFFF, 4:0xFFFFFFFF, 8:0xFFFFFFFFFFFFFFFF}
-        self.datafmt_mapper = {2:"%04X", 4:"%08X", 8:"%016X"}
+        self.ptrsize_pyfmt_mapper = {2: "H", 4: "I", 8: "Q"}
+        self.ptrsize_mask_mapper = {2: 0xFFFF, 4: 0xFFFFFFFF, 8: 0xFFFFFFFFFFFFFFFF}
+        self.datafmt_mapper = {2: "%04X", 4: "%08X", 8: "%016X"}
         self.endianness = idaapi.get_inf_structure().mf
 
     def uses_delay_slot(self):
@@ -44,7 +48,7 @@ class TargetProcessor:
 
     def supports_assemble(self):
         return self.is_assemble_supported
-    
+
     def add_ret_icode(self, icode):
         self.ret_icodes.append(icode)
 
@@ -59,7 +63,7 @@ class TargetProcessor:
 
     def get_ptr_pack_fmt_string(self):
         endiannesfmt = "<" if self.is_little_endian() else ">"
-        return endiannesfmt+self.ptrsize_pyfmt_mapper[self.get_pointer_size()]
+        return endiannesfmt + self.ptrsize_pyfmt_mapper[self.get_pointer_size()]
 
     def get_data_fmt_string(self):
         return self.datafmt_mapper[self.get_pointer_size()]
@@ -70,16 +74,16 @@ class TargetProcessor:
 
 def to_hex_str(s):
     hs = ""
-    if s != None:
+    if s is not None:
         for e in s:
             hs += "%02X " % ord(e)
     return hs
-        
+
 
 class DisasmEngine:
     def __init__(self, proc):
         self.proc = proc
-        self.maxinstr = 20 # max instructions to disasm per "gadget"
+        self.maxinstr = 20  # max instructions to disasm per "gadget"
 
     def set_max_insn(self, count):
         self.maxinstr = count
@@ -93,7 +97,7 @@ class DisasmEngine:
     def disasm_single_ins(self, ea):
         result = None
         i = DecodeInstruction(ea)
-        if i != None:
+        if i is not None:
             flags = GetSegmentAttr(ea, SEGATTR_FLAGS)
             use_dbg = flags & SFL_DEBUG != 0
             stream = GetManyBytes(ea, i.size, use_dbg)
@@ -105,8 +109,8 @@ class DisasmEngine:
         insns = self.get_disasm_internal(ea)
 
         for i in insns:
-            if i != None:
-                ea,ins,line,isret,strm = i
+            if i is not None:
+                ea, ins, line, isret, strm = i
                 strm = to_hex_str(strm)
                 if isret:
                     color = idaapi.SCOLOR_CREFTAIL
@@ -122,7 +126,7 @@ class DisasmEngine:
             cont = idaapi.COLSTR("...", idaapi.SCOLOR_HIDNAME)
             disasm.append((cont, cont))
         return disasm
-  
+
     def get_disasm_internal(self, ea):
         nextea = ea
         disasm = []
@@ -130,9 +134,9 @@ class DisasmEngine:
         inscnt = 0
         while (nextea != endEA) and (inscnt < self.maxinstr):
             ins = self.disasm_single_ins(nextea)
-            if ins != None:
-                ea,i,line,isret,strm = ins
-                disasm.append (ins)
+            if ins is not None:
+                ea, i, line, isret, strm = ins
+                disasm.append(ins)
                 nextea += i.size
                 # TODO: stop disassembling at
                 # user-defined instructions (taken from "proc" instance?)
@@ -143,16 +147,16 @@ class DisasmEngine:
                     # are there any processors that support both
                     # "delay-slot" and "non-delay-slot" return instructions?
                     if self.proc.uses_delay_slot():
-                        inscnt += 1                        
+                        inscnt += 1
                         disasm.append(self.disasm_single_ins(nextea))
                     return disasm
                 inscnt += 1
             else:
                 nextea = BADADDR
             if nextea == BADADDR:
-                disasm.append (None)
+                disasm.append(None)
         return disasm
-    
+
 
 class Payload:
     def __init__(self):
@@ -164,7 +168,7 @@ class Payload:
         self.da = DisasmEngine(self.proc)
         self.init()
 
-    def init(self, items = []):
+    def init(self, items=[]):
         self.items = items
 
     def load_from_idb(self):
@@ -180,7 +184,6 @@ class Payload:
         node.create(self.nodename)
         node.setblob(pickle.dumps(self.items), 0, "D")
 
-        
     def load_from_file(self, fileName):
         self.init()
         result = False
@@ -198,7 +201,6 @@ class Payload:
                 f.close()
         return result
 
-
     def save_to_file(self, fileName):
         result = False
         f = None
@@ -214,24 +216,21 @@ class Payload:
                 f.close()
         return result
 
-
     def serialize_buf_from_items(self):
         buf = ""
         for item in self.items:
             buf += struct.pack(self.proc.get_ptr_pack_fmt_string(), item.ea)
         return buf
-    
 
     def deserialize_items_from_buf(self, buf):
-        itemlist = []
-        for p in xrange(0, len(buf), 4):
+        items = []
+        for p in xrange(0, len(buf), self.proc.get_pointer_size()):
             try:
-                ea = struct.unpack(self.proc.get_ptr_pack_fmt_string(), buf[p:p+self.proc.get_pointer_size()])[0]
+                ea = struct.unpack(self.proc.get_ptr_pack_fmt_string(), buf[p:p + self.proc.get_pointer_size()])[0]
             except:
                 break
-            itemlist.append(Item(ea, 0))
-        return itemlist
-
+            items.append(Item(ea, 0))
+        return items
 
     def get_number_of_items(self):
         return len(self.items)
@@ -255,11 +254,7 @@ class Payload:
     def remove_item(self, n):
         self.items.pop(n)
 
-
     def reset_types(self):
         for n in xrange(self.get_number_of_items()):
-            #self.set_type(n, 0)
-            self.get_item(n).type = Item.TYPE_DATA
-
-
-
+            # self.set_type(n, 0)
+            self.get_item(n).type = Item.TYPE_IMMEDIATE

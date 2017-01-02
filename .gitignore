@@ -1,0 +1,3 @@
+*.pyc 
+drgadget/*.pyc
+drgadget/plugins/*.pyc
