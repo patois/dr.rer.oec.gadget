@@ -9,20 +9,6 @@ Develop and analyze ROP exploits for
 all processor architectures supported
 by IDA itself!
 
-what's new:
-===========
-
-* This is a fork of the 'original' Dr.Gadget plugin
-* State is saved to and loaded from IDB by default
-* (hopefully universal) support for all processor modules
-  supported by IDA itself (including 64bit etc.)
-* "plugin" interface - write a plugin for this plugin! ;-)
-* IDA disassembly is kept in its original state
-* hotkeys for interactive "browsing" the disassembly
-  and memory for useful gadgets and strings
-* context-sensitive content viewers
-* show extended information about modules (ASLR/DEP)
-
 how to install:
 ===============
 

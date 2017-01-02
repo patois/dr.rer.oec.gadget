@@ -1,0 +1,23 @@
+Current version is 1.1.
+
+
+Version 1.1:
+===============
+* added division into blocks with different colors
+* added an address gadget type (now you have code, address and immediate)
+* added colors to the hex dump and mouse highlight
+* numerous bugs and issues fixed
+
+
+Version 1.0 (the original "what's new" for the fork):
+===============
+* This is a fork of the 'original' Dr.Gadget plugin
+* State is saved to and loaded from IDB by default
+* (hopefully universal) support for all processor modules
+  supported by IDA itself (including 64bit etc.)
+* "plugin" interface - write a plugin for this plugin! ;-)
+* IDA disassembly is kept in its original state
+* hotkeys for interactive "browsing" the disassembly
+  and memory for useful gadgets and strings
+* context-sensitive content viewers
+* show extended information about modules (ASLR/DEP)
