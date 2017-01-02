@@ -1,9 +1,14 @@
-import idaapi, ida_segment, ida_bytes, ida_lines
-import os, sys, types
-from idc import *
-from payload import Item
+import os
+import sys
 from copy import deepcopy
+import ida_bytes
+import ida_lines
+import ida_segment
+import idaapi
+from idc import *
+from collections import deque
 import dataviewers
+from payload import Item
 
 drgadget_plugins_path = idaapi.idadir(os.path.join("plugins", "drgadget", "plugins"))
 
@@ -251,10 +256,20 @@ class ropviewer_t(idaapi.simplecustviewer_t):
             self.set_item(n, item)
 
     def insert_item(self, n, item=None):
-        if self.Count() == 0:
-            n = 0
         if item is None:
             item = Item(0, Item.TYPE_IMMEDIATE)
+
+        # find the appropriate block color for the new line
+        # n is the cursor position and also
+        # the destination line for the new item
+
+        if self.Count() == 0:
+            n = 0
+        else:
+            reference_item = self.get_item(n)
+            if reference_item is not None:
+                item.block_num = reference_item.block_num
+
         self.payload.insert_item(n, item)
         self.refresh()
 
@@ -642,6 +657,7 @@ class ropviewer_t(idaapi.simplecustviewer_t):
         self.fix_block_numbers()
         self.refresh()
 
+
     def get_unused_block_numbers(self):
         lines_count = self.Count()
         if lines_count == 0:
@@ -654,7 +670,7 @@ class ropviewer_t(idaapi.simplecustviewer_t):
             if item is not None:
                 unused_block_numbers.discard(item.block_num)
 
-        return unused_block_numbers
+        return deque(sorted(unused_block_numbers))
 
     def fix_block_numbers(self):
         """
@@ -676,8 +692,6 @@ class ropviewer_t(idaapi.simplecustviewer_t):
             # n lines use exactly n block numbers - nothing to do here
             return
 
-        unused_block_numbers = list(unused_block_numbers)
-
         # look for very high block numbers and replace them
         renumbering = {}
         for i in xrange(lines_count):
@@ -691,7 +705,7 @@ class ropviewer_t(idaapi.simplecustviewer_t):
                 item.block_num = renumbering[item.block_num]
             else:
                 # assign a new number
-                new_number = unused_block_numbers.pop()
+                new_number = unused_block_numbers.popleft()
                 renumbering[item.block_num] = new_number
                 item.block_num = new_number
             self.set_item(i, item)
@@ -725,7 +739,7 @@ class ropviewer_t(idaapi.simplecustviewer_t):
             if item.block_num in renumbering:
                 item.block_num = renumbering[item.block_num]
             else:
-                new_number = unused_block_numbers.pop()
+                new_number = unused_block_numbers.popleft()
                 renumbering[item.block_num] = new_number
                 item.block_num = new_number
             self.set_item(i, item)
