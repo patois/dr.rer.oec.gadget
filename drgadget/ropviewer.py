@@ -148,7 +148,7 @@ class ropviewer_t(idaapi.simplecustviewer_t):
     def OnClose(self):
         self.window_created = False
 
-    def create_colored_line(self, n):
+    def create_colored_line_and_bgcolor(self, n):
         item = self.get_item(n)
         if item is None:
             return None
@@ -189,10 +189,10 @@ class ropviewer_t(idaapi.simplecustviewer_t):
     def get_clipboard(self):
         return self.clipboard
 
-    def create_colored_lines(self):
+    def create_colored_lines_and_bgcolors(self):
         lines = []
         for i in xrange(self.payload.get_number_of_items()):
-            l = self.create_colored_line(i)
+            l = self.create_colored_line_and_bgcolor(i)
             lines.append(l)
         return lines
 
@@ -293,8 +293,8 @@ class ropviewer_t(idaapi.simplecustviewer_t):
             item.type = Item.TYPES[(item.type + 1) % len(Item.TYPES)]
 
             self.set_item(n, item)
-            l = self.create_colored_line(n)
-            self.EditLine(n, l)
+            l, background_color = self.create_colored_line_and_bgcolor(n)
+            self.EditLine(n, l, bgcolor=background_color)
             self.Refresh()
 
     def jump_to_item_ea(self, n):
@@ -306,7 +306,7 @@ class ropviewer_t(idaapi.simplecustviewer_t):
     def refresh(self):
         self.ClearLines()
         # for line in self.create_colored_lines():
-        for line, background_color in self.create_colored_lines():
+        for line, background_color in self.create_colored_lines_and_bgcolors():
             self.AddLine(line, bgcolor=background_color)
         self.Refresh()
 
@@ -624,14 +624,109 @@ class ropviewer_t(idaapi.simplecustviewer_t):
     def make_block(self):
         selection = self.GetSelection()
         if selection is not None:
-            _, first_line, _, last_line = selection
+            _, first_line, _, last_line_inclusive = selection
         else:
-            first_line = last_line = self.GetLineNo()
+            first_line = last_line_inclusive = self.GetLineNo()
 
-        for n in xrange(first_line, last_line+1):
-            item = self.get_item(n)
+        # you have n lines
+        # mark the selected block as n+1, then fix things
+        line_count = self.Count()
+        new_block_number = line_count + 1  # intentionally high
+
+        for line_number in xrange(first_line, last_line_inclusive+1):
+            item = self.get_item(line_number)
             if item is not None:
-                item.block_num += 1
-                self.set_item(n, item)
+                item.block_num = new_block_number
+                self.set_item(line_number, item)
+
+        self.fix_block_numbers()
         self.refresh()
+
+    def get_unused_block_numbers(self):
+        lines_count = self.Count()
+        if lines_count == 0:
+            return set()
+
+        unused_block_numbers = set(xrange(lines_count))
+
+        for i in xrange(lines_count):
+            item = self.get_item(i)
+            if item is not None:
+                unused_block_numbers.discard(item.block_num)
+
+        return unused_block_numbers
+
+    def fix_block_numbers(self):
+        """
+        You have n lines.
+        Renumber the blocks so that:
+        1) all the block numbers are between 0 and n-1
+        2) all blocks are contiguous
+        3) the renumbering affects the least amount of blocks possible
+
+        The implementation performs (1) and (2) separately.
+        """
+        lines_count = self.Count()
+        if lines_count == 0:
+            return
+
+        unused_block_numbers = self.get_unused_block_numbers()
+
+        if len(unused_block_numbers) == 0:
+            # n lines use exactly n block numbers - nothing to do here
+            return
+
+        unused_block_numbers = list(unused_block_numbers)
+
+        # look for very high block numbers and replace them
+        renumbering = {}
+        for i in xrange(lines_count):
+            item = self.get_item(i)
+            if item is None:
+                continue
+            if 0 <= item.block_num < lines_count:
+                continue
+            # an invalid block number - did we assign it a new number already?
+            if item.block_num in renumbering:
+                item.block_num = renumbering[item.block_num]
+            else:
+                # assign a new number
+                new_number = unused_block_numbers.pop()
+                renumbering[item.block_num] = new_number
+                item.block_num = new_number
+            self.set_item(i, item)
+
+        # since we renumbered the blocks there should be less available numbers
+        unused_block_numbers = self.get_unused_block_numbers()
+
+        # look for non-contiguous blocks
+        if lines_count < 3:
+            # too few lines for problems
+            return
+
+        previous_block_number = self.get_item(0).block_num
+        visited_blocks = {previous_block_number}
+        renumbering = {}
+
+        for i in xrange(1, lines_count):
+            item = self.get_item(i)
+            if item is None:
+                continue
+            if item.block_num == previous_block_number:
+                continue
+            # we're at the beginning of a new block
+            if item.block_num not in visited_blocks:
+                # a valid, previously unseen block
+                visited_blocks.add(item.block_num)
+                previous_block_number = item.block_num
+                continue
+
+            # found a non-contiguous block - did we assign it a new number already?
+            if item.block_num in renumbering:
+                item.block_num = renumbering[item.block_num]
+            else:
+                new_number = unused_block_numbers.pop()
+                renumbering[item.block_num] = new_number
+                item.block_num = new_number
+            self.set_item(i, item)
 
