@@ -2,6 +2,7 @@ import idaapi
 from idc import *
 import pickle
 from idautils import DecodeInstruction
+import struct
 
 
 # add support for xrefs?
@@ -222,14 +223,14 @@ class Payload:
         return buf
 
     def deserialize_items_from_buf(self, buf):
-        itemlist = []
-        for p in xrange(0, len(buf), 4):
+        items = []
+        for p in xrange(0, len(buf), self.proc.get_pointer_size()):
             try:
                 ea = struct.unpack(self.proc.get_ptr_pack_fmt_string(), buf[p:p + self.proc.get_pointer_size()])[0]
             except:
                 break
-            itemlist.append(Item(ea, 0))
-        return itemlist
+            items.append(Item(ea, 0))
+        return items
 
     def get_number_of_items(self):
         return len(self.items)
