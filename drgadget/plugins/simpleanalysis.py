@@ -8,12 +8,18 @@ of any item's address that points into an
 executable section to "TYPE_CODE"
 """
 
-def analyze (payload):
-    for n in xrange (payload.get_number_of_items()):
+
+def analyze(payload):
+    for n in xrange(payload.get_number_of_items()):
         ea = payload.get_item(n).ea
         seg = idaapi.getseg(ea)
-        if seg and ((seg.perm & idaapi.SEGPERM_EXEC) != 0):
-            payload.get_item(n).type = Item.TYPE_CODE
+        if seg:
+            # address points to one of the segments
+            if (seg.perm & idaapi.SEGPERM_EXEC) != 0:
+                payload.get_item(n).type = Item.TYPE_CODE
+            else:
+                payload.get_item(n).type = Item.TYPE_ADDRESS
+
 
 class drgadgetplugin_t:
     def __init__(self, payload, rv):
@@ -27,7 +33,7 @@ class drgadgetplugin_t:
     # or None if no callbacks should be installed    
     def get_callback_list(self):
         return self.menucallbacks
-    
+
     def run(self):
         analyze(self.payload)
         self.rv.refresh()
